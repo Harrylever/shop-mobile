@@ -1,56 +1,78 @@
-# Welcome to your Expo app 👋
+# Croesus mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The Expo mobile storefront for Croesus Fashion & Stores. It uses the same catalog,
+inventory, checkout, Paystack, and order-confirmation backend as the web store.
 
-## Get started
+## Included
 
-1. Install dependencies
+- Live database-backed product catalog from `shop-backend`
+- Search and category filters
+- Product detail screens
+- Persistent favorites and shopping bag via AsyncStorage
+- Google sign-in with a SecureStore-backed mobile session
+- Stock-aware quantity controls
+- Guest delivery form and Paystack checkout handoff
+- Android, iOS, and web-compatible Expo Router navigation
+- Croesus app icon and splash branding
 
-   ```bash
-   npm install
-   ```
+## Requirements
 
-2. Start the app
+- Bun
+- Node.js 22.13 or newer for Expo SDK 57
+- Expo Go or an Android/iOS simulator
 
-   ```bash
-   npx expo start
-   ```
+## Configure
 
-In the output, you'll find options to open the app in a
+Copy `.env.example` to `.env.local`:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```sh
+cp .env.example .env.local
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The production API is the default, so the app runs without an environment file.
+Override it when working against a local backend:
 
-### Other setup steps
+```env
+EXPO_PUBLIC_SHOP_API_URL=http://192.168.1.20:4100
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Use your computer's LAN address on a physical device. `localhost` points to the
+phone itself. Add the Expo web origin to the backend `CORS_ORIGINS` when testing
+the web target.
 
-## Learn more
+## Run
 
-To learn more about developing your project with Expo, look at the following resources:
+```sh
+bun install
+bunx expo start
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Then press `i`, `a`, or `w` for iOS, Android, or web. You can also scan the QR
+code with Expo Go.
 
-## Join the community
+The catalog and guest checkout work in Expo Go. Google sign-in uses the stable
+`croesus://auth/callback` deep link and therefore requires a development or release
+build. Expo recommends a build for stable OAuth callback URLs because Expo Go URLs
+change with the development server.
 
-Join our community of developers creating universal apps.
+## Validate
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```sh
+bunx expo lint
+bunx tsc --noEmit
+bunx expo-doctor
+```
+
+## Payments
+
+Checkout creates an order through `POST /api/v1/orders/checkout` and opens the
+returned Paystack authorization URL with `expo-web-browser`. Payment state remains
+authoritative on the backend through Paystack verification and webhooks.
+
+## Authentication
+
+The app opens the backend Google OAuth flow with `expo-web-browser`. After Google
+returns to `croesus://auth/callback`, the app exchanges the short-lived, single-use
+code with its PKCE verifier for a session token and stores that token with
+`expo-secure-store`. Authenticated API calls send it as a bearer token. The existing
+web storefront continues to use its HTTP-only session cookie.

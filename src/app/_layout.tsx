@@ -1,18 +1,63 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+  useFonts,
+} from "@expo-google-fonts/dm-sans"
+import { Stack } from "expo-router"
+import * as SplashScreen from "expo-splash-screen"
+import { StatusBar } from "expo-status-bar"
+import { useEffect } from "react"
+import { SafeAreaProvider } from "react-native-safe-area-context"
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { Palette } from "@/constants/theme"
+import { AuthProvider } from "@/store/auth-provider"
+import { ShopProvider } from "@/store/shop-provider"
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync()
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+  })
+
+  useEffect(() => {
+    if (fontsLoaded) void SplashScreen.hideAsync()
+  }, [fontsLoaded])
+
+  if (!fontsLoaded) return null
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
-  );
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ShopProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              contentStyle: { backgroundColor: Palette.cream },
+              headerBackButtonDisplayMode: "minimal",
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: Palette.cream },
+              headerTintColor: Palette.forestDark,
+              headerTitleStyle: { fontFamily: "DMSans_600SemiBold" },
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="product/[id]"
+              options={{ title: "Product details" }}
+            />
+            <Stack.Screen
+              name="checkout"
+              options={{ title: "Secure checkout", presentation: "modal" }}
+            />
+          </Stack>
+        </ShopProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
+  )
 }
