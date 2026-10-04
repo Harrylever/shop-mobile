@@ -13,6 +13,10 @@ const API_URL = (process.env.EXPO_PUBLIC_SHOP_API_URL ?? 'https://xs.croesus.liv
 
 type Envelope<T> = { data?: T; error?: { message?: string } };
 
+export type SyncedCart = {
+  items: { productId: string; quantity: number }[];
+};
+
 async function request<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -73,6 +77,34 @@ export function verifyPayment(reference: string) {
 
 export function getOrders(token: string) {
   return request<OrderHistory[]>('/api/v1/orders', undefined, token);
+}
+
+export function getSyncedCart(token: string) {
+  return request<SyncedCart>('/api/v1/cart', undefined, token);
+}
+
+export function mergeSyncedCart(items: SyncedCart['items'], token: string) {
+  return request<SyncedCart>(
+    '/api/v1/cart/merge',
+    { method: 'POST', body: JSON.stringify({ items }) },
+    token,
+  );
+}
+
+export function setSyncedCartItem(
+  productId: string,
+  quantity: number,
+  token: string,
+) {
+  return request<SyncedCart>(
+    `/api/v1/cart/items/${encodeURIComponent(productId)}`,
+    { method: 'PUT', body: JSON.stringify({ quantity }) },
+    token,
+  );
+}
+
+export function clearSyncedCart(token: string) {
+  return request<SyncedCart>('/api/v1/cart', { method: 'DELETE' }, token);
 }
 
 export function mobileGoogleAuthUrl(redirectUri: string, challenge: string) {

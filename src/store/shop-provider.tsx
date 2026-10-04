@@ -5,10 +5,20 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 
-import { getCatalog } from '@/lib/shop-api';
+import {
+  clearSyncedCart,
+  getCatalog,
+  getSyncedCart,
+  mergeSyncedCart,
+  setSyncedCartItem,
+} from '@/lib/shop-api';
+import type { SyncedCart } from '@/lib/shop-api';
+import { useAuth } from '@/store/auth-provider';
 import type { Product } from '@/types/shop';
 
 type Cart = Record<string, number>;
@@ -28,6 +38,7 @@ type ShopContextValue = {
 };
 
 const CART_KEY = 'croesus.mobile.cart.v1';
+const CART_OWNER_KEY = 'croesus.mobile.cart.owner.v1';
 const FAVORITES_KEY = 'croesus.mobile.favorites.v1';
 const ShopContext = createContext<ShopContextValue | null>(null);
 
@@ -63,13 +74,45 @@ function parseFavorites(value: string | null): string[] {
   }
 }
 
+function cartFromSnapshot(snapshot: SyncedCart): Cart {
+  return Object.fromEntries(
+    snapshot.items.map((item) => [item.productId, item.quantity]),
+  );
+}
+
+function cartItems(cart: Cart): SyncedCart['items'] {
+  return Object.entries(cart).map(([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
+}
+
 export function ShopProvider({ children }: { children: React.ReactNode }) {
+  const { loading: authLoading, token, user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<Cart>({});
   const [favorites, setFavorites] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const cartRef = useRef<Cart>({});
+  const cartOwnerRef = useRef<string | null>(null);
+  const syncQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const replaceCart = useCallback((next: Cart) => {
+    cartRef.current = next;
+    setCart(next);
+  }, []);
+
+  const enqueue = useCallback((operation: () => Promise<unknown>) => {
+    syncQueueRef.current = syncQueueRef.current
+      .catch(() => undefined)
+      .then(operation)
+      .then(() => undefined)
+      .catch((cause) => {
+        console.error('Could not synchronize the cart', cause);
+      });
+  }, []);
 
   const refreshCatalog = useCallback(async () => {
     setLoading(true);
@@ -83,13 +126,29 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const syncWithAccount = useCallback(() => {
+    if (!token || !user) return;
+    enqueue(async () => {
+      const localCart = cartRef.current;
+      const hasGuestItems =
+        !cartOwnerRef.current && Object.keys(localCart).length > 0;
+      const snapshot = hasGuestItems
+        ? await mergeSyncedCart(cartItems(localCart), token)
+        : await getSyncedCart(token);
+
+      cartOwnerRef.current = user.id;
+      await AsyncStorage.setItem(CART_OWNER_KEY, user.id);
+      replaceCart(cartFromSnapshot(snapshot));
+    });
+  }, [enqueue, replaceCart, token, user]);
+
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
       const [catalogResult, storageResult] = await Promise.allSettled([
         getCatalog(),
-        AsyncStorage.multiGet([CART_KEY, FAVORITES_KEY]),
+        AsyncStorage.multiGet([CART_KEY, CART_OWNER_KEY, FAVORITES_KEY]),
       ]);
 
       if (cancelled) return;
@@ -105,9 +164,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (storageResult.status === 'fulfilled') {
-        const entries = storageResult.value;
-        const stored = Object.fromEntries(entries);
-        setCart(parseCart(stored[CART_KEY] ?? null));
+        const stored = Object.fromEntries(storageResult.value);
+        replaceCart(parseCart(stored[CART_KEY] ?? null));
+        cartOwnerRef.current = stored[CART_OWNER_KEY] ?? null;
         setFavorites(parseFavorites(stored[FAVORITES_KEY] ?? null));
       }
 
@@ -119,7 +178,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [replaceCart]);
 
   useEffect(() => {
     if (hydrated) void AsyncStorage.setItem(CART_KEY, JSON.stringify(cart));
@@ -129,27 +188,74 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     if (hydrated) void AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
   }, [favorites, hydrated]);
 
-  const addToCart = useCallback((product: Product) => {
-    if (product.stock <= 0) return;
-    setCart((current) => ({
-      ...current,
-      [product.id]: Math.min((current[product.id] ?? 0) + 1, product.stock, 20),
-    }));
-  }, []);
+  useEffect(() => {
+    if (!hydrated || authLoading) return;
+    if (token && user) {
+      syncWithAccount();
+      return;
+    }
+    if (!token && !user && cartOwnerRef.current) {
+      cartOwnerRef.current = null;
+      replaceCart({});
+      void AsyncStorage.removeItem(CART_OWNER_KEY);
+    }
+  }, [authLoading, hydrated, replaceCart, syncWithAccount, token, user]);
 
-  const changeQuantity = useCallback((product: Product, delta: number) => {
-    setCart((current) => {
-      const nextQuantity = Math.min((current[product.id] ?? 0) + delta, product.stock, 20);
-      if (nextQuantity <= 0) {
-        const next = { ...current };
-        delete next[product.id];
-        return next;
-      }
-      return { ...current, [product.id]: nextQuantity };
+  useEffect(() => {
+    if (!hydrated || !token || !user) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncWithAccount();
     });
-  }, []);
+    return () => subscription.remove();
+  }, [hydrated, syncWithAccount, token, user]);
 
-  const clearCart = useCallback(() => setCart({}), []);
+  const persistItem = useCallback(
+    (productId: string, quantity: number) => {
+      if (!token || !user) return;
+      enqueue(() => setSyncedCartItem(productId, quantity, token));
+    },
+    [enqueue, token, user],
+  );
+
+  const addToCart = useCallback(
+    (product: Product) => {
+      if (product.stock <= 0) return;
+      const nextQuantity = Math.min(
+        (cartRef.current[product.id] ?? 0) + 1,
+        product.stock,
+        20,
+      );
+      replaceCart({ ...cartRef.current, [product.id]: nextQuantity });
+      persistItem(product.id, nextQuantity);
+    },
+    [persistItem, replaceCart],
+  );
+
+  const changeQuantity = useCallback(
+    (product: Product, delta: number) => {
+      const nextQuantity = Math.min(
+        (cartRef.current[product.id] ?? 0) + delta,
+        product.stock,
+        20,
+      );
+      if (nextQuantity <= 0) {
+        const next = { ...cartRef.current };
+        delete next[product.id];
+        replaceCart(next);
+        persistItem(product.id, 0);
+        return;
+      }
+      replaceCart({ ...cartRef.current, [product.id]: nextQuantity });
+      persistItem(product.id, nextQuantity);
+    },
+    [persistItem, replaceCart],
+  );
+
+  const clearCart = useCallback(() => {
+    replaceCart({});
+    if (token && user) enqueue(() => clearSyncedCart(token));
+  }, [enqueue, replaceCart, token, user]);
+
   const toggleFavorite = useCallback((productId: string) => {
     setFavorites((current) =>
       current.includes(productId)
@@ -157,7 +263,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         : [...current, productId],
     );
   }, []);
-  const cartCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
+
+  const cartCount = Object.values(cart).reduce(
+    (total, quantity) => total + quantity,
+    0,
+  );
 
   const value = useMemo(
     () => ({
