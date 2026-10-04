@@ -55,6 +55,14 @@ export default function RootLayout() {
               name="checkout"
               options={{ title: "Secure checkout", presentation: "modal" }}
             />
+            <Stack.Screen
+              name="auth/callback"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="payments/callback"
+              options={{ headerShown: false }}
+            />
           </Stack>
         </ShopProvider>
       </AuthProvider>

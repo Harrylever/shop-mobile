@@ -6,11 +6,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: "croesus-store",
   version: "1.0.0",
   orientation: "portrait",
-  icon: "./assets/images/croesus-icon.png",
+  icon: "./assets/images/icon.png",
   scheme: "croesus",
   userInterfaceStyle: "light",
   ios: {
-    icon: "./assets/images/croesus-icon.png",
+    icon: "./assets/images/icon.png",
     supportsTablet: true,
     bundleIdentifier: "live.croesus.store",
   },
@@ -18,22 +18,24 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: "live.croesus.store",
     adaptiveIcon: {
       backgroundColor: "#173C2B",
-      foregroundImage: "./assets/images/croesus-icon.png",
+      foregroundImage: "./assets/images/android-icon-foreground.png",
+      backgroundImage: "./assets/images/android-icon-background.png",
+      monochromeImage: "./assets/images/android-icon-monochrome.png",
     },
     predictiveBackGestureEnabled: false,
   },
   web: {
     output: "static",
-    favicon: "./assets/images/croesus-icon.png",
+    favicon: "./assets/images/icon.png",
   },
   plugins: [
     "expo-router",
     [
       "expo-splash-screen",
       {
-        backgroundColor: "#173C2B",
-        image: "./assets/images/croesus-icon.png",
-        imageWidth: 128,
+        backgroundColor: "#FFFFFF",
+        image: "./assets/images/splash-icon.png",
+        imageWidth: 150,
       },
     ],
     "expo-asset",

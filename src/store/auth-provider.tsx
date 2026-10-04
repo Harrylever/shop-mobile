@@ -10,6 +10,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react"
 import { Platform } from "react-native"
@@ -23,6 +24,7 @@ import {
 import type { ShopUser } from "@/types/shop"
 
 const SESSION_KEY = "croesus.mobile.session.v1"
+const PENDING_VERIFIER_KEY = "croesus.mobile.auth-verifier.v1"
 
 type AuthContextValue = {
   user: ShopUser | null
@@ -30,25 +32,26 @@ type AuthContextValue = {
   loading: boolean
   authenticating: boolean
   error: string | null
+  completeSignIn: (code: string) => Promise<boolean>
   signIn: () => Promise<void>
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-async function readToken() {
-  if (Platform.OS === "web") return AsyncStorage.getItem(SESSION_KEY)
-  return SecureStore.getItemAsync(SESSION_KEY)
+async function readStorage(key: string) {
+  if (Platform.OS === "web") return AsyncStorage.getItem(key)
+  return SecureStore.getItemAsync(key)
 }
 
-async function saveToken(token: string) {
-  if (Platform.OS === "web") return AsyncStorage.setItem(SESSION_KEY, token)
-  return SecureStore.setItemAsync(SESSION_KEY, token)
+async function saveStorage(key: string, value: string) {
+  if (Platform.OS === "web") return AsyncStorage.setItem(key, value)
+  return SecureStore.setItemAsync(key, value)
 }
 
-async function removeToken() {
-  if (Platform.OS === "web") return AsyncStorage.removeItem(SESSION_KEY)
-  return SecureStore.deleteItemAsync(SESSION_KEY)
+async function removeStorage(key: string) {
+  if (Platform.OS === "web") return AsyncStorage.removeItem(key)
+  return SecureStore.deleteItemAsync(key)
 }
 
 function callbackCode(url: string) {
@@ -69,12 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [authenticating, setAuthenticating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const completionRef = useRef<Promise<boolean> | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function restoreSession() {
-      const storedToken = await readToken()
+      const storedToken = await readStorage(SESSION_KEY)
       if (!storedToken) {
         if (!cancelled) setLoading(false)
         return
@@ -86,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(storedToken)
           setUser(account)
         } else {
-          await removeToken()
+          await removeStorage(SESSION_KEY)
         }
       } catch {
         if (!cancelled) {
@@ -104,6 +108,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  const completeSignIn = useCallback((code: string) => {
+    if (completionRef.current) return completionRef.current
+
+    const completion = (async () => {
+      setAuthenticating(true)
+      setError(null)
+      try {
+        const verifier = await readStorage(PENDING_VERIFIER_KEY)
+        if (!verifier) {
+          const existingToken = await readStorage(SESSION_KEY)
+          if (existingToken) {
+            const existingUser = await getCurrentUser(existingToken)
+            if (existingUser) {
+              setToken(existingToken)
+              setUser(existingUser)
+              return true
+            }
+          }
+          throw new Error("This Google sign-in request expired. Please start again.")
+        }
+        const session = await exchangeMobileAuthCode(code, verifier)
+        await saveStorage(SESSION_KEY, session.token)
+        setToken(session.token)
+        setUser(session.user)
+        return true
+      } catch (cause) {
+        setError(
+          cause instanceof Error ? cause.message : "Google sign-in failed.",
+        )
+        return false
+      } finally {
+        await removeStorage(PENDING_VERIFIER_KEY)
+        setAuthenticating(false)
+        completionRef.current = null
+      }
+    })()
+
+    completionRef.current = completion
+    return completion
   }, [])
 
   const signIn = useCallback(async () => {
@@ -129,25 +174,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Crypto.CryptoDigestAlgorithm.SHA256,
         verifier,
       )
+      await saveStorage(PENDING_VERIFIER_KEY, verifier)
       const result = await WebBrowser.openAuthSessionAsync(
         mobileGoogleAuthUrl(redirectUri, challenge),
         redirectUri,
       )
-      if (result.type !== "success") return
+      if (result.type !== "success") {
+        return
+      }
       const code = callbackCode(result.url)
       if (!code) throw new Error("Google did not return a valid sign-in code.")
-      const session = await exchangeMobileAuthCode(code, verifier)
-      await saveToken(session.token)
-      setToken(session.token)
-      setUser(session.user)
+      await completeSignIn(code)
     } catch (cause) {
+      await removeStorage(PENDING_VERIFIER_KEY)
       setError(
         cause instanceof Error ? cause.message : "Google sign-in failed.",
       )
     } finally {
       setAuthenticating(false)
     }
-  }, [authenticating])
+  }, [authenticating, completeSignIn])
 
   const signOut = useCallback(async () => {
     const activeToken = token
@@ -158,7 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Clearing the local credential still signs this device out.
     } finally {
-      await removeToken()
+      await Promise.all([
+        removeStorage(SESSION_KEY),
+        removeStorage(PENDING_VERIFIER_KEY),
+      ])
       setToken(null)
       setUser(null)
       setAuthenticating(false)
@@ -166,8 +215,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token])
 
   const value = useMemo(
-    () => ({ user, token, loading, authenticating, error, signIn, signOut }),
-    [authenticating, error, loading, signIn, signOut, token, user],
+    () => ({
+      user,
+      token,
+      loading,
+      authenticating,
+      error,
+      completeSignIn,
+      signIn,
+      signOut,
+    }),
+    [
+      authenticating,
+      completeSignIn,
+      error,
+      loading,
+      signIn,
+      signOut,
+      token,
+      user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

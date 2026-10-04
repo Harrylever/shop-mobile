@@ -51,6 +51,7 @@ export function initializeCheckout(
       customer: { name: details.name, email: details.email, phone: details.phone },
       delivery: { address: details.address, city: details.city, state: details.state },
       items,
+      client: 'mobile',
     }),
   }, token ?? undefined);
 }

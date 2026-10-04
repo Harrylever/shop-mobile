@@ -63,7 +63,10 @@ export default function ShopTabs() {
       <TabSlot style={styles.slot} />
       <TabList asChild>
         <View
-          style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 9) }]}
+          style={StyleSheet.flatten([
+            styles.tabBar,
+            { paddingBottom: Math.max(insets.bottom, 9) },
+          ])}
         >
           <TabTrigger name="home" href="/" asChild>
             <TabButton icon={Home01Icon} label="Home" />
@@ -108,13 +111,12 @@ const styles = StyleSheet.create({
   tab: { alignItems: "center", flex: 1, gap: 3, justifyContent: "center" },
   iconWrap: {
     alignItems: "center",
-    borderRadius: 19,
     height: 36,
     justifyContent: "center",
     position: "relative",
-    width: 48,
+    width: 36,
   },
-  iconWrapActive: { backgroundColor: Palette.forestDark },
+  iconWrapActive: { backgroundColor: Palette.forestDark, borderRadius: 18 },
   label: {
     color: Palette.inkSoft,
     fontFamily: "DMSans_600SemiBold",
