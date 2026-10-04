@@ -55,6 +55,7 @@ export default function RootLayout() {
               name="checkout"
               options={{ title: "Secure checkout", presentation: "modal" }}
             />
+            <Stack.Screen name="orders" options={{ title: "Your orders" }} />
             <Stack.Screen
               name="auth/callback"
               options={{ headerShown: false }}

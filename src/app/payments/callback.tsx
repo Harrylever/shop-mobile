@@ -105,7 +105,7 @@ export default function PaymentCallbackScreen() {
             <Text style={styles.copy}>
               Order {reference} is confirmed. We sent the receipt to {paymentState.email}.
             </Text>
-            <Action label="Continue shopping" onPress={() => router.replace('/')} />
+            <Action label="Track your order" onPress={() => router.replace('/orders')} />
           </>
         ) : paymentState.type === 'pending' ? (
           <>

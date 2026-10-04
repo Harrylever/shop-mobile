@@ -1,7 +1,12 @@
-import { Logout03Icon, Shield01Icon } from '@hugeicons/core-free-icons';
+import {
+  DeliveryTracking01Icon,
+  Logout03Icon,
+  Shield01Icon,
+} from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import { Image } from 'expo-image';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrandHeader } from '@/components/brand-header';
@@ -23,7 +28,7 @@ export default function AccountScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <BrandHeader eyebrow="Your Croesus account" />
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={Palette.orange} />
@@ -53,9 +58,16 @@ export default function AccountScreen() {
             <View style={styles.benefit}>
               <Text style={styles.benefitTitle}>Your checkout, connected.</Text>
               <Text style={styles.benefitCopy}>
-                Orders placed while signed in are linked to this account, and your verified name and email are ready at checkout.
+                Orders placed with {user.email} appear here, including purchases made as a guest before you signed in.
               </Text>
             </View>
+            <Pressable onPress={() => router.push('/orders')} style={styles.ordersButton}>
+              <View>
+                <Text style={styles.ordersButtonTitle}>My orders</Text>
+                <Text style={styles.ordersButtonCopy}>View purchases and payment status</Text>
+              </View>
+              <HugeiconsIcon icon={DeliveryTracking01Icon} size={22} color={Palette.cream} />
+            </Pressable>
             <Pressable
               disabled={authenticating}
               onPress={signOut}
@@ -74,7 +86,7 @@ export default function AccountScreen() {
             <Text style={styles.kicker}>YOUR ACCOUNT</Text>
             <Text style={styles.title}>Sign in. Shop easier.</Text>
             <Text style={styles.copy}>
-              Continue with Google to connect purchases to your Croesus account and prefill your verified details at checkout.
+              Continue with Google to see purchases placed with the same email, including guest orders, and prefill your verified checkout details.
             </Text>
             <Pressable
               disabled={authenticating}
@@ -89,14 +101,14 @@ export default function AccountScreen() {
           </>
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { backgroundColor: Palette.cream, flex: 1 },
-  content: { flex: 1, padding: 24, paddingBottom: 120 },
+  content: { flexGrow: 1, padding: 24, paddingBottom: 120 },
   center: { alignItems: 'center', flex: 1, gap: 12, justifyContent: 'center' },
   loadingText: { color: Palette.inkSoft, fontFamily: 'DMSans_400Regular', fontSize: 13 },
   mark: { alignItems: 'center', backgroundColor: Palette.forestDark, height: 72, justifyContent: 'center', marginBottom: 28, marginTop: 44, width: 72 },
@@ -120,6 +132,9 @@ const styles = StyleSheet.create({
   benefit: { backgroundColor: Palette.paper, marginTop: 18, padding: 18 },
   benefitTitle: { color: Palette.ink, fontFamily: 'DMSans_700Bold', fontSize: 14 },
   benefitCopy: { color: Palette.inkSoft, fontFamily: 'DMSans_400Regular', fontSize: 12, lineHeight: 19, marginTop: 7 },
+  ordersButton: { alignItems: 'center', backgroundColor: Palette.forestDark, flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, padding: 18 },
+  ordersButtonTitle: { color: Palette.cream, fontFamily: 'DMSans_700Bold', fontSize: 14 },
+  ordersButtonCopy: { color: Palette.sage, fontFamily: 'DMSans_400Regular', fontSize: 10, marginTop: 3 },
   outlineButton: { alignItems: 'center', borderColor: Palette.forestDark, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 22, paddingHorizontal: 18, paddingVertical: 16 },
   outlineButtonText: { color: Palette.forestDark, fontFamily: 'DMSans_700Bold', fontSize: 13 },
   disabled: { opacity: 0.5 },

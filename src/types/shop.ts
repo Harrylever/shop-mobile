@@ -31,6 +31,35 @@ export type CheckoutResult = {
   authorizationUrl: string;
 };
 
+export type OrderHistoryItem = {
+  id: string;
+  orderId: string;
+  productId: string | null;
+  productName: string;
+  condition: 'new' | 'used';
+  unitPriceKobo: number;
+  quantity: number;
+  lineTotalKobo: number;
+  imageUrl: string | null;
+};
+
+export type OrderHistory = {
+  id: string;
+  reference: string;
+  status: 'pending' | 'paid' | 'failed';
+  subtotalKobo: number;
+  deliveryKobo: number;
+  totalKobo: number;
+  currency: string;
+  deliveryAddress: string;
+  deliveryCity: string;
+  deliveryState: string;
+  emailSentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: OrderHistoryItem[];
+};
+
 export type ShopUser = {
   id: string;
   email: string;

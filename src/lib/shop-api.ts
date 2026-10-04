@@ -1,4 +1,10 @@
-import type { CheckoutDetails, CheckoutResult, Product, ShopUser } from '@/types/shop';
+import type {
+  CheckoutDetails,
+  CheckoutResult,
+  OrderHistory,
+  Product,
+  ShopUser,
+} from '@/types/shop';
 
 const API_URL = (process.env.EXPO_PUBLIC_SHOP_API_URL ?? 'https://xs.croesus.live').replace(
   /\/$/,
@@ -63,6 +69,10 @@ export function verifyPayment(reference: string) {
     email: string;
     emailSent: boolean;
   }>(`/api/v1/payments/verify/${encodeURIComponent(reference)}`);
+}
+
+export function getOrders(token: string) {
+  return request<OrderHistory[]>('/api/v1/orders', undefined, token);
 }
 
 export function mobileGoogleAuthUrl(redirectUri: string, challenge: string) {
