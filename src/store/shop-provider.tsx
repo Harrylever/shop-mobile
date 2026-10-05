@@ -12,6 +12,7 @@ import { AppState } from 'react-native';
 
 import {
   clearSyncedCart,
+  getCartRealtimeUrl,
   getCatalog,
   getSyncedCart,
   mergeSyncedCart,
@@ -208,6 +209,68 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     });
     return () => subscription.remove();
   }, [hydrated, syncWithAccount, token, user]);
+
+  useEffect(() => {
+    if (!hydrated || !token || !user) return;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnectAttempt = 0;
+
+    const scheduleReconnect = () => {
+      if (disposed || reconnectTimer !== undefined) return;
+      const delay = Math.min(1_000 * 2 ** reconnectAttempt, 15_000);
+      reconnectAttempt += 1;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = undefined;
+        void connect();
+      }, delay);
+    };
+
+    const connect = async () => {
+      try {
+        const url = await getCartRealtimeUrl(token);
+        if (disposed) return;
+
+        const nextSocket = new WebSocket(url);
+        socket = nextSocket;
+        nextSocket.addEventListener('open', () => {
+          reconnectAttempt = 0;
+        });
+        nextSocket.addEventListener('message', (event) => {
+          try {
+            const message: unknown = JSON.parse(String(event.data));
+            if (
+              !message ||
+              typeof message !== 'object' ||
+              !('type' in message) ||
+              message.type !== 'cart.updated' ||
+              !('data' in message)
+            ) {
+              return;
+            }
+            const snapshot = message.data as SyncedCart;
+            if (!Array.isArray(snapshot.items)) return;
+            replaceCart(cartFromSnapshot(snapshot));
+          } catch {
+            // Ignore malformed realtime messages and keep the connection open.
+          }
+        });
+        nextSocket.addEventListener('error', () => nextSocket.close());
+        nextSocket.addEventListener('close', scheduleReconnect);
+      } catch {
+        scheduleReconnect();
+      }
+    };
+
+    void connect();
+    return () => {
+      disposed = true;
+      if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, [hydrated, replaceCart, token, user]);
 
   const persistItem = useCallback(
     (productId: string, quantity: number) => {

@@ -83,6 +83,16 @@ export function getSyncedCart(token: string) {
   return request<SyncedCart>('/api/v1/cart', undefined, token);
 }
 
+export async function getCartRealtimeUrl(token: string) {
+  const { ticket } = await request<{ ticket: string; expiresAt: string }>(
+    '/api/v1/cart/realtime-ticket',
+    { method: 'POST' },
+    token,
+  );
+  const socketBase = API_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+  return `${socketBase}/api/v1/cart/live?ticket=${encodeURIComponent(ticket)}`;
+}
+
 export function mergeSyncedCart(items: SyncedCart['items'], token: string) {
   return request<SyncedCart>(
     '/api/v1/cart/merge',
